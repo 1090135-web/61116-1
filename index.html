@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>太空射擊遊戲</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #0d1117;
+            color: white;
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+            flex-direction: column;
+        }
+
+        #game-container {
+            position: relative;
+            width: 80vw;
+            height: 80vh;
+            max-width: 800px;
+            max-height: 600px;
+            background-color: #010409;
+            border: 2px solid #238636;
+            box-shadow: 0 0 20px rgba(35, 134, 54, 0.5);
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+
+        #game-canvas {
+            background: radial-gradient(circle, #010409 0%, #0d1117 100%);
+            border-radius: 10px;
+        }
+
+        #game-info {
+            display: flex;
+            justify-content: space-between;
+            width: 80vw;
+            max-width: 800px;
+            font-size: 1.2em;
+            margin-top: 10px;
+        }
+
+        #start-screen, #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(1, 4, 9, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            font-size: 1.5em;
+            z-index: 10;
+        }
+
+        #game-over-screen {
+            display: none;
+        }
+
+        .game-button {
+            padding: 12px 24px;
+            margin-top: 20px;
+            font-size: 1em;
+            font-weight: bold;
+            color: white;
+            background-color: #238636;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .game-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .game-button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+        <div id="start-screen">
+            <h1>太空射擊遊戲</h1>
+            <p>使用滑鼠或觸控來移動。</p>
+            <p>你的飛船會自動射擊！</p>
+            <button class="game-button" onclick="startGame()">開始遊戲</button>
+        </div>
+        <div id="game-over-screen">
+            <h2>遊戲結束</h2>
+            <p id="final-score">你的分數: 0</p>
+            <button class="game-button" onclick="restartGame()">再玩一次</button>
+        </div>
+    </div>
+    <div id="game-info">
+        <span id="score">分數: 0</span>
+        <span id="health">生命: 100</span>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalScoreText = document.getElementById('final-score');
+        const scoreElement = document.getElementById('score');
+        const healthElement = document.getElementById('health');
+        const container = document.getElementById('game-container');
+
+        // Game states
+        let gameRunning = false;
+        let score = 0;
+        let health = 100;
+
+        // Player properties
+        const player = {
+            x: 0,
+            y: 0,
+            width: 40,
+            height: 40,
+            color: '#00FFFF',
+            dx: 0,
+            dy: 0,
+            speed: 5
+        };
+
+        // Arrays for game objects
+        let bullets = [];
+        let enemies = [];
+        let particles = [];
+
+        // Game timers and intervals
+        let enemySpawnInterval;
+        let bulletInterval;
+        let lastFrameTime = 0;
+        let animationFrameId;
+
+        // --- Game Setup and Reset ---
+        function resizeCanvas() {
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            player.x = canvas.width / 2;
+            player.y = canvas.height - 50;
+        }
+
+        function startGame() {
+            gameRunning = true;
+            score = 0;
+            health = 100;
+            bullets = [];
+            enemies = [];
+            particles = [];
+            
+            startScreen.style.display = 'none';
+            gameOverScreen.style.display = 'none';
+            scoreElement.textContent = `分數: ${score}`;
+            healthElement.textContent = `生命: ${health}`;
+            resizeCanvas();
+
+            // Set up game loops and intervals
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            animationFrameId = requestAnimationFrame(gameLoop);
+
+            if (enemySpawnInterval) clearInterval(enemySpawnInterval);
+            enemySpawnInterval = setInterval(spawnEnemy, 1000); // Spawn an enemy every 1 second
+
+            if (bulletInterval) clearInterval(bulletInterval);
+            bulletInterval = setInterval(shootBullet, 250); // Shoot a bullet every 0.25 seconds
+        }
+
+        function restartGame() {
+            startGame();
+        }
+
+        function endGame() {
+            gameRunning = false;
+            clearInterval(enemySpawnInterval);
+            clearInterval(bulletInterval);
+            cancelAnimationFrame(animationFrameId);
+            finalScoreText.textContent = `你的分數: ${score}`;
+            gameOverScreen.style.display = 'flex';
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // --- Game Objects Drawing ---
+        function drawPlayer() {
+            ctx.fillStyle = player.color;
+            ctx.beginPath();
+            ctx.moveTo(player.x, player.y - player.height / 2);
+            ctx.lineTo(player.x - player.width / 2, player.y + player.height / 2);
+            ctx.lineTo(player.x + player.width / 2, player.y + player.height / 2);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function drawBullets() {
+            ctx.fillStyle = '#FFD700';
+            bullets.forEach(bullet => {
+                ctx.beginPath();
+                ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        function drawEnemies() {
+            ctx.fillStyle = '#FF6347';
+            enemies.forEach(enemy => {
+                ctx.beginPath();
+                ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        function drawParticles() {
+            particles.forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        // --- Game Logic ---
+        function updateGame(deltaTime) {
+            if (!gameRunning) return;
+
+            // Update player position
+            player.x += player.dx * deltaTime;
+            player.y += player.dy * deltaTime;
+
+            // Keep player within canvas bounds
+            player.x = Math.max(player.width / 2, Math.min(canvas.width - player.width / 2, player.x));
+            player.y = Math.max(canvas.height / 2, Math.min(canvas.height, player.y));
+
+            // Update bullets
+            bullets = bullets.filter(bullet => {
+                bullet.y -= bullet.speed * deltaTime;
+                return bullet.y > 0;
+            });
+
+            // Update enemies
+            enemies = enemies.filter(enemy => {
+                enemy.y += enemy.speed * deltaTime;
+
+                // Check for collision with player
+                const distance = Math.sqrt(Math.pow(player.x - enemy.x, 2) + Math.pow(player.y - enemy.y, 2));
+                if (distance < (player.width + enemy.radius) / 2) {
+                    health -= 10;
+                    healthElement.textContent = `生命: ${health}`;
+                    createExplosion(enemy.x, enemy.y, '#FF6347');
+                    if (health <= 0) {
+                        endGame();
+                    }
+                    return false; // Remove enemy on collision
+                }
+
+                // Check if enemy is out of bounds
+                if (enemy.y > canvas.height) {
+                    health -= 5;
+                    healthElement.textContent = `生命: ${health}`;
+                    if (health <= 0) {
+                        endGame();
+                    }
+                    return false; // Remove enemy if it reaches the bottom
+                }
+
+                return true;
+            });
+
+            // Check for bullet and enemy collisions
+            bullets.forEach((bullet, bIndex) => {
+                enemies.forEach((enemy, eIndex) => {
+                    const distance = Math.sqrt(Math.pow(bullet.x - enemy.x, 2) + Math.pow(bullet.y - enemy.y, 2));
+                    if (distance < bullet.radius + enemy.radius) {
+                        // Collision detected
+                        score += 10;
+                        scoreElement.textContent = `分數: ${score}`;
+                        createExplosion(enemy.x, enemy.y, '#FFD700');
+                        bullets.splice(bIndex, 1);
+                        enemies.splice(eIndex, 1);
+                    }
+                });
+            });
+
+            // Update particles
+            particles = particles.filter(p => {
+                p.x += p.vx * deltaTime;
+                p.y += p.vy * deltaTime;
+                p.alpha -= 0.01;
+                return p.alpha > 0;
+            });
+        }
+
+        // --- Input Handling ---
+        canvas.addEventListener('mousemove', (e) => {
+            if (gameRunning) {
+                const rect = canvas.getBoundingClientRect();
+                player.x = e.clientX - rect.left;
+                // No need to update player.y based on mouse
+            }
+        });
+        
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (gameRunning && e.touches.length > 0) {
+                const rect = canvas.getBoundingClientRect();
+                player.x = e.touches[0].clientX - rect.left;
+            }
+        });
+
+        // --- Object Creation ---
+        function shootBullet() {
+            if (gameRunning) {
+                bullets.push({
+                    x: player.x,
+                    y: player.y - player.height / 2,
+                    radius: 3,
+                    speed: 10
+                });
+            }
+        }
+
+        function spawnEnemy() {
+            if (gameRunning) {
+                enemies.push({
+                    x: Math.random() * canvas.width,
+                    y: 0,
+                    radius: 15 + Math.random() * 10,
+                    speed: 2 + Math.random() * 2
+                });
+            }
+        }
+
+        function createExplosion(x, y, color) {
+            for (let i = 0; i < 20; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    radius: 2,
+                    color: color,
+                    vx: (Math.random() - 0.5) * 5,
+                    vy: (Math.random() - 0.5) * 5,
+                    alpha: 1
+                });
+            }
+        }
+
+        // --- Main Game Loop ---
+        function gameLoop(currentTime) {
+            if (!gameRunning) return;
+
+            const deltaTime = (currentTime - lastFrameTime) / 16.67; // Normalize to a consistent frame rate (approx 60fps)
+            lastFrameTime = currentTime;
+
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Update and draw all game objects
+            updateGame(deltaTime);
+            drawPlayer();
+            drawBullets();
+            drawEnemies();
+            drawParticles();
+
+            // Request next frame
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+    </script>
+</body>
+</html>
